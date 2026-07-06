@@ -1,1 +1,778 @@
 
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>አል ጀበል የፍራሽ እና ተያያዥ ምርቶች መደብር(Multi-Branch)</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 10px; box-sizing: border-box; }
+        .container { max-width: 500px; margin: 0 auto; display: none; } 
+        
+        /* 🔐 የሎግኢን ስታይል */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #2c3e50; z-index: 10001;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .login-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); max-width: 350px; width: 100%; text-align: center; }
+        .login-box h2 { margin-top: 0; color: #2c3e50; font-size: 18px; }
+        .login-input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 13px; }
+        .btn-login { background: #2ecc71; color: white; border: none; padding: 10px; width: 100%; border-radius: 5px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .btn-logout { background: #e74c3c; color: white; border: none; padding: 8px 14px; font-size: 13px; border-radius: 6px; cursor: pointer; float: right; margin-top: 15px; font-weight: bold; }
+
+        /* 🎯 የማስታወቂያ ስታይል */
+        #ad-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #2c3e50, #1a252f); z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: white; text-align: center; padding: 20px; box-sizing: border-box; display: none;
+        }
+        .ad-box { background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; border: 2px solid #3498db; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 400px; width: 100%; }
+        .ad-phone { font-size: 24px; color: #2ecc71; font-weight: bold; margin: 8px 0; display: block; }
+
+        /* 👑 ዋናው ሄደር ካርድ/በተን (በመጠን፣ በቁመትና በፅሁፍ 100% ከሌሎች እንዲበልጥ የተደረገ) */
+        .menu-header-card {
+            background: linear-gradient(135deg, #1f4068, #162447); color: white; text-align: center;
+            padding: 35px 20px; /* 👈 ቁመቱ እና የጎን ስፋቱ (በተኑ ራሱ) እጥፍ እንዲያድግ ተደርጓል */
+            font-size: 26px;      /* 👈 ከሌሎች በተኖች (13px) በ 100% እጥፍ የገዘፈ ፅሁፍ */
+            font-weight: 900;     /* 👈 እጅግ ወፍራም ፊደላት */
+            border-radius: 12px;   margin-bottom: 16px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.35); /* 👈 ይበልጥ ጎልቶ እንዲወጣ የከበደ ጥላ */
+            line-height: 1.5; letter-spacing: 1px;
+            border: 2px solid #1f4068;
+            box-sizing: border-box;
+        }
+        
+        /* 📱 የሌሎቹ መደበኛ ፓናሎች (Buttons) መጠን (13px) */
+        .menu-btn-card {
+            color: white; text-align: center; padding: 10px 12px; margin-bottom: 8px;
+            border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1); transition: transform 0.1s ease;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;
+            box-sizing: border-box;
+        }
+        .menu-btn-card:active { transform: scale(0.98); }
+        .menu-btn-card .sub-text { font-size: 11px; font-weight: normal; opacity: 0.85; }
+
+        /* የሜኑ ከለሮች ግሬዲየንት */
+        .bg-branch      { background: linear-gradient(to right, #2c3e50, #34495e); }
+        .bg-budget      { background: linear-gradient(to right, #16a085, #1abc9c); }
+        .bg-main-items  { background: linear-gradient(to right, #2c3e50, #2980b9); } 
+        .bg-owners      { background: linear-gradient(to right, #27ae60, #2ecc71); }
+        .bg-report      { background: linear-gradient(to right, #8e44ad, #9b59b6); }
+        .bg-table       { background: linear-gradient(to right, #2980b9, #2471a3); }
+        .bg-owners-table { background: linear-gradient(to right, #c0392b, #cd6155); }
+        .bg-settings    { background: linear-gradient(to right, #7f8c8d, #95a5a6); }
+
+        /* 📦 የውስጥ መረጃ ፓነል */
+        .content-panel {
+            background: white; border-radius: 8px; padding: 10px; margin-bottom: 10px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.06); display: none; border: 1px solid #ddd;
+        }
+        
+        /* 🔗 በፓነሉ ውስጥ ያሉ ሁለት በተኖች ስታይል */
+        .sub-buttons-container { display: flex; gap: 6px; margin-bottom: 10px; }
+        .btn-sub-action {
+            flex: 1; padding: 8px 6px; border: none; border-radius: 6px; color: white;
+            font-weight: bold; font-size: 11px; cursor: pointer; text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: opacity 0.2s;
+        }
+        .btn-sub-action:active { opacity: 0.85; }
+        .bg-sub-buy { background: linear-gradient(to right, #d35400, #e67e22); }  
+        .bg-sub-sell { background: linear-gradient(to right, #2980b9, #3498db); } 
+
+        .live-budget-val { font-size: 20px; font-weight: bold; color: #16a085; text-align: center; padding: 5px; }
+        .inputs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 8px; }
+        .input-box { display: flex; flex-direction: column; }
+        .input-box label { font-size: 11px; color: #444; margin-bottom: 2px; font-weight: bold; }
+        .input-box label.required::after { content: " *"; color: red; }
+        .input-box input, .input-box select { padding: 6px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; outline: none; }
+        
+        .btn-submit { background: #27ae60; color: white; border: none; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; margin-top: 4px; }
+        .sub-form-title { font-size: 12px; font-weight: bold; padding: 4px 8px; background: #f2f4f4; border-radius: 4px; margin-bottom: 8px; color: #34495e; border-left: 3px solid #34495e; }
+
+        /* ሰንጠረዦች */
+        .table-responsive { overflow-x: auto; margin-top: 6px; max-height: 250px; }
+        table { width: 100%; border-collapse: collapse; background: white; font-size: 11px; text-align: left; }
+        th, td { padding: 6px 8px; border: 1px solid #eee; text-align: center; }
+        th { background: #f8f9f9; font-weight: bold; color: #333; position: sticky; top: 0; z-index: 5; }
+        tr:nth-child(even) { background: #fbfcfc; }
+        
+        .btn-action { padding: 2px 4px; border: none; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; color: white; }
+        .btn-edit { background: #3498db; } .btn-delete { background: #e74c3c; }
+        
+        /* የባለቤቶች ሪፖርት */
+        .owner-tabs-container { display: flex; gap: 6px; margin-bottom: 8px; }
+        .owner-tab-btn { flex: 1; padding: 6px; background: #f2f4f4; border: 1px solid #ccc; font-size: 12px; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        .owner-tab-btn.active { background: #e67e22; color: white; }
+        .owner-summary-card { background: #fdf2e9; border: 1px solid #f5cba7; padding: 8px; border-radius: 6px; display: none; }
+        .time-row { font-size: 12px; margin-bottom: 2px; font-weight: bold; color: #444; }
+        .time-row span { color: #d35400; font-size: 14px; }
+        
+        .signature-container { border: 1px dashed #95a5a6; background: #fafafa; border-radius: 5px; padding: 4px; text-align: center; }
+        .clear-sig-btn { background: #7f8c8d; color: white; border: none; padding: 2px 6px; font-size: 10px; margin-top: 2px; cursor: pointer; border-radius: 3px; }
+        
+        .status-debt-btn { background: #e67e22; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 10px; }
+        .status-paid { color: #27ae60; font-weight: bold; }
+
+        .report-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+        .report-tab-btn { flex: 1; padding: 6px; background: #f2f4f4; border: 1px solid #ddd; cursor: pointer; border-radius: 5px; font-size: 11px; font-weight: bold; }
+        .report-tab-btn.active { background: #8e44ad; color: white; }
+        .report-summary { display: flex; justify-content: space-between; background: #f5eeea; padding: 8px; border-radius: 5px; font-size: 12px; font-weight: bold; margin-bottom: 8px; }
+        .search-input { width: 100%; padding: 6px; border: 2px solid #8e44ad; border-radius: 5px; font-size: 12px; box-sizing: border-box; margin-bottom: 8px; }
+
+        /* ሞዳል */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 15px; border-radius: 8px; width: 90%; max-width: 380px; }
+        .branch-option-btn { width: 100%; padding: 8px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 5px; font-size: 13px; font-weight: bold; margin-bottom: 6px; cursor: pointer; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<!-- 🔐 ሎግኢን -->
+<div id="login-overlay">
+    <div class="login-box">
+        <h2>🔐 ወደ ሲስተሙ ይግቡ</h2>
+        <input type="email" id="loginEmail" class="login-input" placeholder="ኢሜይል (Email)">
+        <input type="password" id="loginPassword" class="login-input" placeholder="የይለፍ ቃል (Password)">
+        <button class="btn-login" onclick="handleEmailLogin()">ግባ</button>
+    </div>
+</div>
+
+<!-- 🎯 ማስታወቂያ -->
+<div id="ad-overlay">
+    <div class="ad-box">
+        <h3 style="margin:0; color:#3498db; font-size: 16px;"></h3>
+        <p style="font-size: 16px; font-weight: bold; margin: 10px 0;">ዌብሳይት ለማሰራት ይደውሉ</p>
+        <div class="ad-phone">0927713359</div>
+        <p id="ad-timer-text" style="color: #bdc3c7; font-size: 11px; margin-top: 10px;">ሲስተሙ ለመክፈት 3 ሰከንድ ይቀራል...</p>
+    </div>
+</div>
+
+<div class="container" id="main-system-container">
+    <!-- 👑 ዋና ሄደር ካርድ (በተኑ ራሱ እና ፅሁፉ በ100% እጥፍ የገዘፈው) -->
+    <div class="menu-header-card">
+        አል ጀበል የፍራሽ እና ተያያዥ ምርቶች መደብር
+        <div style="overflow: auto; width: 100%;">
+            <button class="btn-logout" onclick="handleLogout()">🚪 ውጣ</button>
+        </div>
+    </div>
+
+    <!-- 📍 ቅርንጫፍ መቆጣጠሪያ ካርድ -->
+    <div class="menu-btn-card bg-branch" onclick="openBranchModal()">
+        <span>📍 የስራ ቦታ (ቅርንጫፍ) መቆጣጠሪያ</span>
+        <span class="sub-text" id="currentBranchDisplay">ያለው መረጃ ለ፦ ቅርንጫፍ 1 (Branch 1)</span>
+    </div>
+    
+    <!-- ፩. በጀት ካርድ -->
+    <div class="menu-btn-card bg-budget" onclick="toggleSectionWithPin('budgetWrapper')">
+        <span>የድርጅቱ ጠቅላላ የእቃ በጀት</span>
+        <span class="sub-text" id="budgetSubText">በጀት ለማየት እዚህ ይጫኑ</span>
+    </div>
+    <div id="budgetWrapper" class="content-panel">
+        <div class="live-budget-val" id="liveBudgetDisplay">0 ETB</div>
+    </div>
+
+    <!-- ፪. ዋና የእቃ መቆጣጠሪያ ፓነል -->
+    <div class="menu-btn-card bg-main-items" onclick="toggleSectionWithPin('mainItemsWrapper')">
+        <span>🛒💰 ፪. የእቃዎች መግዣ እና መሸጫ መቆጣጠሪያ</span>
+        <span class="sub-text">መግዣ እና መሸጫ በተኖችን ለመክፈት እዚህ ይጫኑ</span>
+    </div>
+    <div id="mainItemsWrapper" class="content-panel" style="background-color: #fcfcfc;">
+        <div class="sub-buttons-container">
+            <button class="btn-sub-action bg-sub-buy" onclick="toggleSubForm('buyForm')">🛒 እቃ ለመግዛት / ለመተካት</button>
+            <button class="btn-sub-action bg-sub-sell" onclick="toggleSubForm('sellForm')">💰 እቃ ለመሸጥ / ለመመዝገብ</button>
+        </div>
+
+        <!-- 🛒 የእቃዎች መግዣ ፎርም -->
+        <div id="subBuyForm" style="display: none; border-top: 1px dashed #e67e22; padding-top: 10px;">
+            <div class="sub-form-title">🛒 የእቃዎች መግዣ/መተኪያ ፎርም</div>
+            <div class="inputs-grid">
+                <input type="hidden" id="editItemIndex" value="">
+                <div class="input-box">
+                    <label class="required">የእቃ ምድብ</label>
+                    <select id="itemCategory"></select>
+                    <button class="btn-submit" style="font-size:9px; padding:2px; margin-top:2px;" onclick="addNewCategoryPrompt()">➕ አዲስ ምድብ</button>
+                </div>
+                <div class="input-box"><label class="required">መለያ ID</label><input type="number" id="itemCustomId" placeholder="ምሳሌ፡ 1"></div>
+                <div class="input-box"><label class="required">የእቃው ስም</label><input type="text" id="itemName" placeholder="አንቲ 150 ሜ 24 ቲክ"></div>
+                <div class="input-box"><label>መግዣ ዋጋ</label><input type="number" id="buyPrice" placeholder="0"></div>
+                <div class="input-box"><label>ወጪ</label><input type="number" id="expense" placeholder="0"></div>
+                <div class="input-box"><label class="required">...ብዛት</label><input type="number" id="itemQty" value="1" min="1"></div>
+                <div class="input-box"><label class="required">የመግዣ ቀን</label><input type="date" id="itemDate"></div>
+            </div>
+            <button class="btn-submit" onclick="handleFormSubmit()">💾 የእቃ መረጃ መዝግብ</button>
+        </div>
+
+        <!-- 💰 የእቃዎች መሸጫ ፎርም -->
+        <div id="subSellForm" style="display: none; border-top: 1px dashed #3498db; padding-top: 10px;">
+            <div class="sub-form-title" style="border-left-color: #3498db; color: #3498db;">💰 የእቃዎች መሸጫ ፎርም</div>
+            <div class="inputs-grid">
+                <div class="input-box"><label class="required">የሚሸጠው ምድብ</label><select id="sellCategory" onchange="autoFillSaleItemName()"></select></div>
+                <div class="input-box"><label class="required">የእቃው መለያ ID</label><input type="number" id="itemRowId" oninput="autoFillSaleItemName()"></div>
+                <div class="input-box"><label class="required">የእቃው ስም</label><input type="text" id="sellItemName" readonly onclick="showAvailableItemsDropdown()" placeholder="ለመምረጥ ይንኩ"></div>
+                <div class="input-box"><label>የሻጭ ስም</label><input type="text" id="sellerName"></div>
+                <div class="input-box"><label class="required">መሸጫ ዋጋ</label><input type="number" id="sellPrice"></div>
+                <div class="input-box"><label class="required">የተሸጠ ብዛት</label><input type="number" id="sellQty" value="1" min="1"></div>
+                <div class="input-box"><label class="required">የመሸጫ ቀን</label><input type="date" id="saleDate"></div>
+            </div>
+            <button class="btn-submit" style="background-color:#3498db;" onclick="handleSaleSubmit()">📊 ሽያጭ መዝግብ</button>
+        </div>
+    </div>
+
+    <!-- ፫. የባለቤቶች ቁጥጥር ካርድ -->
+    <div class="menu-btn-card bg-owners" onclick="toggleSectionWithPin('ownersWrapper')">
+        <span>👥 ፫. የባለቤቶች የገንዘብ ቁጥጥር ፓነል</span>
+        <span class="sub-text">መረጃዎችን ለማየት እዚህ ይጫኑ</span>
+    </div>
+    <div id="ownersWrapper" class="content-panel">
+        <div class="owner-tabs-container">
+            <button class="owner-tab-btn" id="tab-k" onclick="switchOwnerTab('ኸሊል', 'k')">ኸሊል</button>
+            <button class="owner-tab-btn" id="tab-n" onclick="switchOwnerTab('ነስሬ', 'n')">ነስሬ</button>
+            <button class="owner-tab-btn" id="tab-z" onclick="switchOwnerTab('ዚዳን', 'z')">ዚዳን</button>
+        </div>
+        <div class="owner-summary-card" id="card-ኸሊል">
+            <div class="time-row">ዛሬ፦ <span id="k-daily">0 ETB</span></div>
+            <div class="time-row">ሳምንት፦ <span id="k-weekly">0 ETB</span></div>
+            <div class="time-row">ወር፦ <span id="k-monthly">0 ETB</span></div>
+            <div class="time-row">ዓመት፦ <span id="k-yearly">0 ETB</span></div>
+        </div>
+        <div class="owner-summary-card" id="card-ነስሬ">
+            <div class="time-row">ዛሬ፦ <span id="n-daily">0 ETB</span></div>
+            <div class="time-row">ሳምንት፦ <span id="n-weekly">0 ETB</span></div>
+            <div class="time-row">ወር፦ <span id="n-monthly">0 ETB</span></div>
+            <div class="time-row">ዓመት፦ <span id="n-yearly">0 ETB</span></div>
+        </div>
+        <div class="owner-summary-card" id="card-ዚዳን">
+            <div class="time-row">ዛሬ፦ <span id="z-daily">0 ETB</span></div>
+            <div class="time-row">ሳምንት፦ <span id="z-weekly">0 ETB</span></div>
+            <div class="time-row">ወር፦ <span id="z-monthly">0 ETB</span></div>
+            <div class="time-row">ዓመት፦ <span id="z-yearly">0 ETB</span></div>
+        </div>
+
+        <div class="sub-form-title" style="margin-top:10px; border-left-color:#27ae60; color:#27ae60;">✍️ አዲስ ገንዘብ/እቃ መውሰጃ ፎርም</div>
+        <div class="inputs-grid">
+            <div class="input-box"><label class="required">የባለቤቱ ስም</label><select id="ownerName"><option value="ኸሊል">ኸሊል</option><option value="ነስሬ">ነስሬ</option><option value="ዚዳን">ዚዳን</option></select></div>
+            <div class="input-box"><label class="required">የገንዘብ መጠን</label><input type="number" id="ownerAmount"></div>
+            <div class="input-box"><label class="required">ምክንያት</label><input type="text" id="ownerReason"></div>
+            <div class="input-box"><label class="required">ቀን</label><input type="date" id="ownerDate"></div>
+            <div class="input-box" style="grid-column: span 2;">
+                <label>ዲጂታል ፊርማ</label>
+                <div class="signature-container">
+                    <canvas id="sigCanvas" width="240" height="60"></canvas><br>
+                    <button class="clear-sig-btn" type="button" onclick="clearSignature()">ፊርማ አጽዳ</button>
+                </div>
+            </div>
+        </div>
+        <button class="btn-submit" style="background-color:#27ae60;" onclick="handleOwnerTransaction()">✍️ መውጫ መዝግብ</button>
+    </div>
+
+    <!-- ፬. የሽያጭ ታሪክ እና ሪፖርት ካርድ -->
+    <div class="menu-btn-card bg-report" onclick="toggleSectionWithPin('reportWrapper')">
+        <span>📈 ፬. የሽያጭ ታሪክ እና የሪፖርት መቆጣጠሪያ</span>
+        <span class="sub-text">ሪፖርቶችን ለማየት እዚህ ይጫኑ</span>
+    </div>
+    <div id="reportWrapper" class="content-panel">
+        <div class="report-tabs">
+            <button class="report-tab-btn active" id="rep-tab-daily" onclick="switchReportTab('daily')">እለታዊ</button>
+            <button class="report-tab-btn" id="rep-tab-weekly" onclick="switchReportTab('weekly')">ሳምንታዊ</button>
+            <button class="report-tab-btn" id="rep-tab-monthly" onclick="switchReportTab('monthly')">ወርሃዊ</button>
+            <button class="report-tab-btn" id="rep-tab-yearly" onclick="switchReportTab('yearly')">አመታዊ</button>
+        </div>
+        <input type="text" id="reportSearchInput" class="search-input" placeholder="🔍 በምድብ ወይም በ ID ፈልግ..." oninput="filterReportHistory()">
+        <div class="report-summary">
+            <div>ብዛት፦ <span id="stat-total-qty">0</span></div>
+            <div>ትርፍ፦ <span id="stat-total-profit" style="color:#27ae60;">0 ETB</span></div>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>ቀን</th><th>እቃ</th><th>ዋጋ</th><th>ድርጊት</th></tr></thead>
+                <tbody id="reportTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ፭. የተመዘገቡ እቃዎች ሰንጠረዥ ካርድ -->
+    <div class="menu-btn-card bg-table" onclick="toggleSectionWithPin('tableWrapper')">
+        <span>📊 ፭. የተመዘገቡ እቃዎች እና የሽያጭ ሰንጠረዥ</span>
+        <span class="sub-text">ሰንጠረዡን ለመክፈት እዚህ ይጫኑ</span>
+    </div>
+    <div id="tableWrapper" class="content-panel">
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr><th>ምድብ</th><th>አይዲ</th><th>የእቃው ስም</th><th>መግዣ</th><th>ወጪ</th><th>መጀመሪያ</th><th>ቀሪ</th><th>የተሸጠ</th><th>ሻጭ</th><th>ቀን</th><th>ትርፍ</th><th>ድርጊት</th></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ፮. የዕዳ እና ፊርማ መዝገብ ካርድ -->
+    <div class="menu-btn-card bg-owners-table" onclick="toggleSectionWithPin('ownersTableWrapper')">
+        <span>📜 ፮. የባለቤቶች የዕዳ እና የፊርማ መዝገብ ሰንጠረዥ</span>
+        <span class="sub-text">መዝገቡን ለመክፈት እዚህ ይጫኑ</span>
+    </div>
+    <div id="ownersTableWrapper" class="content-panel">
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr><th>ተ.ቁ</th><th>ቀን</th><th>ባለቤት</th><th>የተወሰደ</th><th>ቀሪ ዕዳ</th><th>ምክንያት</th><th>ሁኔታ</th><th>ፊርማ</th><th>ድርጊት</th></tr>
+                </thead>
+                <tbody id="ownersTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ፯. የሲስተም ሴቲንግ ካርድ -->
+    <div class="menu-btn-card bg-settings" onclick="toggleSectionWithPin('settingsWrapper')">
+        <span>⚙️ ፯. የሲስተም ሴቲንግ (የፒን ቁልፍ ቅንብሮች)</span>
+        <span class="sub-text">ቅንብሮችን ለመቀየር እዚህ ይጫኑ</span>
+    </div>
+    <div id="settingsWrapper" class="content-panel">
+        <div id="dynamicSettingsUI">የመቆለፊያ ቅንብሮች በመጫን ላይ...</div>
+    </div>
+</div>
+
+<!-- 📍 ሞዳሎች -->
+<div id="branchModal" class="modal">
+    <div class="modal-content">
+        <h3 style="margin-top:0; font-size: 14px;">📍 ቅርንጫፍ ይምረጡ</h3>
+        <button class="branch-option-btn" onclick="selectBranch('branch_1', 'ቅርንጫፍ 1 (Branch 1)')">🏬 ቅርንጫፍ 1</button>
+        <button class="branch-option-btn" onclick="selectBranch('branch_2', 'ቅርንጫፍ 2 (Branch 2)')">🏪 ቅርንጫፍ 2</button>
+        <button class="btn-submit" style="background:#7f8c8d;" onclick="closeBranchModal()">❌ ዝጋ</button>
+    </div>
+</div>
+
+<div id="itemsDropdownModal" class="modal">
+    <div class="modal-content" style="max-height: 70vh; overflow-y: auto;">
+        <h3 style="font-size: 14px;">📋 ያሉ እቃዎች ዝርዝር</h3>
+        <div id="itemsDropdownList"></div>
+        <button class="btn-submit" style="background:#7f8c8d;" onclick="closeItemsDropdownModal()">❌ ዝጋ</button>
+    </div>
+</div>
+
+<div id="paymentModal" class="modal">
+    <div class="modal-content">
+        <h3 style="font-size: 14px;">💰 የዕዳ መክፈያ</h3>
+        <p id="modalInfo" style="font-size: 12px;"></p>
+        <div class="input-box"><label>የሚከፍሉት የገንዘብ መጠን</label><input type="number" id="payAmount"></div>
+        <div class="modal-actions" style="display:flex; gap:8px; margin-top:12px;">
+            <button class="btn-submit" onclick="submitDebtPayment()">✅ ክፍያ ፈጽም</button>
+            <button class="btn-submit" style="background:#7f8c8d;" onclick="closeModal()">❌ ዝጋ</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyBQ8l5UBWim2NKI_5dCrz1S-jYlqFQMJBk",
+        authDomain: "my-shoping-center.firebaseapp.com",
+        databaseURL: "https://my-shoping-center-default-rtdb.europe-west1.firebasedatabase.app", 
+        projectId: "my-shoping-center",
+        storageBucket: "my-shoping-center.firebasestorage.app",
+        messagingSenderId: "796582932855",
+        appId: "1:796582932855:web:22e0914903d97189137172",
+        measurementId: "G-XBCJS83SE1"
+    };
+    
+    firebase.initializeApp(firebaseConfig); 
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('ad-overlay').style.display = 'flex';
+            startAdTimer();
+        } else {
+            document.getElementById('login-overlay').style.display = 'flex';
+            document.getElementById('main-system-container').style.display = 'none';
+            document.getElementById('ad-overlay').style.display = 'none';
+        }
+    });
+
+    function handleEmailLogin() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        if (email === "" || password === "") { alert("❌ እባክዎ ኢሜይል እና ፓስወርድ ያስገቡ!"); return; }
+        auth.signInWithEmailAndPassword(email, password)
+            .catch((error) => { alert("❌ ስህተት፦ " + error.message); });
+    }
+
+    function handleLogout() { if (confirm("እርግጠኛ ነዎት መውጣት ይፈልጋሉ?")) { auth.signOut().then(() => { location.reload(); }); } }
+
+    function startAdTimer() {
+        let timeLeft = 3;
+        const adTimer = setInterval(() => {
+            timeLeft--;
+            if(timeLeft <= 0) { 
+                clearInterval(adTimer); 
+                document.getElementById('ad-overlay').style.display = 'none'; 
+                document.getElementById('main-system-container').style.display = 'block';
+                buildSettingsUI();
+                startLiveListening();
+            } else { document.getElementById('ad-timer-text').innerText = `ሲስተሙ ለመክፈት ${timeLeft} ሰከንድ ይቀራል...`; }
+        }, 1000);
+    }
+
+    let lockModes = JSON.parse(localStorage.getItem('lockModes')) || {
+        budgetContent: "locked", mainItemsContent: "open", ownersContent: "locked", salesHistoryContent: "locked", tableContent: "locked", ownersTableContent: "locked"
+    };
+    let unlockedSections = {}; let globalCalculatedBudget = 0; let currentBranch = "branch_1"; 
+    let currentDbRef = null; let categories = ["ፍራሽ", "ምንጣፍ", "ብርድልብስ", "ትራስ", "ሌላ"];
+    let items = {}; let salesHistory = {}; let ownerTransactions = []; let activeDebtKey = null; let currentReportTab = 'daily';
+
+    function saveLockModes() { localStorage.setItem('lockModes', JSON.stringify(lockModes)); }
+
+    function buildSettingsUI() {
+        const container = document.getElementById('dynamicSettingsUI'); if(!container) return;
+        const sectionsMapping = {
+            budgetContent: "፩. የድርጅቱ በጀት", mainItemsContent: "፪. የእቃ መግዣ/መሸጫ ፓነል", ownersContent: "፫. የባለቤቶች መቆጣጠሪያ",
+            salesHistoryContent: "፬. የሽያጭ ታሪክ እና ሪፖርት", tableContent: "፭. የተመዘገቡ እቃዎች ሰንጠረዥ", ownersTableContent: "፮. የዕዳ እና የፊርማ መዝገብ"
+        };
+        let html = "";
+        for (let id in sectionsMapping) {
+            const mode = lockModes[id] || "locked";
+            html += `
+            <div class="setting-row">
+                <label>${sectionsMapping[id]}</label>
+                <div style="display:flex; gap:5px;">
+                    <select id="lock-${id}" onchange="secureSettingChange('${id}', this)">
+                        <option value="locked" ${mode === 'locked' ? 'selected' : ''}>በፒን የተቆለፈ</option>
+                        <option value="open" ${mode === 'open' ? 'selected' : ''}>ሁልጊዜ ክፍት</option>
+                    </select>
+                    <input type="password" id="pin-${id}" value="****" style="width:50px; font-size:11px;" onchange="securePinChange('${id}', this)" ${mode === 'open' ? 'style="display:none;"' : ''}>
+                </div>
+            </div>`;
+        }
+        container.innerHTML = html;
+    }
+
+    function openBranchModal() { document.getElementById('branchModal').style.display = "flex"; }
+    function closeBranchModal() { document.getElementById('branchModal').style.display = "none"; }
+    
+    function selectBranch(branchKey, branchName) {
+        currentBranch = branchKey;
+        document.getElementById('currentBranchDisplay').innerText = "ያለው መረጃ ለ፦ " + branchName;
+        unlockedSections = {}; document.getElementById('liveBudgetDisplay').innerText = "0 ETB";
+        document.getElementById('budgetSubText').innerText = "በጀት ለማየት እዚህ ይጫኑ";
+        if (currentDbRef) currentDbRef.off();
+        startLiveListening(); closeBranchModal();
+    }
+
+    function securePinChange(id, inputElement) {
+        const userCheck = prompt("⚠️ የዚህን ክፍል አሁን ያለውን PIN ያስገቡ፦");
+        if (userCheck === null) return;
+        db.ref(`multi_branch_data/system_pins/${id}`).once('value').then((snapshot) => {
+            if (userCheck === (snapshot.val() || "1998")) {
+                const newPin = inputElement.value.trim();
+                if (newPin === "" || newPin === "****") { alert("❌ ስህተት!"); buildSettingsUI(); return; }
+                db.ref(`multi_branch_data/system_pins/${id}`).set(newPin).then(() => { alert("✅ ፒኑ ተቀይሯል!"); });
+            } else { alert("❌ ስህተት!"); buildSettingsUI(); }
+        });
+    }
+
+    function secureSettingChange(id, selectElement) {
+        const userCheck = prompt("⚠️ የዚህን ክፍል አሁን ያለውን PIN ያስገቡ፦");
+        if (userCheck === null) return;
+        db.ref(`multi_branch_data/system_pins/${id}`).once('value').then((snapshot) => {
+            if (userCheck === (snapshot.val() || "1998")) {
+                lockModes[id] = selectElement.value; saveLockModes();
+                if (selectElement.value === "open") { unlockedSections[id] = true; refreshBudgetDisplay(); } else { delete unlockedSections[id]; }
+                buildSettingsUI();
+            } else { alert("❌ የተሳሳተ PIN!"); selectElement.value = lockModes[id]; }
+        });
+    }
+
+    function toggleSectionWithPin(wrapperId) {
+        const content = document.getElementById(wrapperId);
+        const isVisible = content.style.display === "block";
+        const dbIdMap = { 
+            budgetWrapper: 'budgetContent', 
+            mainItemsWrapper: 'mainItemsContent',
+            ownersWrapper: 'ownersContent', 
+            reportWrapper: 'salesHistoryContent', 
+            tableWrapper: 'tableContent', 
+            ownersTableWrapper: 'ownersTableContent', 
+            settingsWrapper: 'settingsContent' 
+        };
+        const dbId = dbIdMap[wrapperId];
+
+        if (isVisible) {
+            content.style.display = "none";
+            if (lockModes[dbId] === "locked") delete unlockedSections[dbId];
+            return;
+        }
+        if (!dbId || lockModes[dbId] === "open" || unlockedSections[dbId] || wrapperId === 'settingsWrapper') {
+            content.style.display = "block";
+            if (wrapperId === 'budgetWrapper') refreshBudgetDisplay();
+            if (wrapperId === 'ownersWrapper') switchOwnerTab('ኸሊል', 'k');
+            return;
+        }
+        const userPin = prompt("🔐 ለመክፈት PIN ያስገቡ፦");
+        if (userPin === null) return;
+
+        db.ref(`multi_branch_data/system_pins/${dbId}`).once('value').then((snapshot) => {
+            if (userPin === (snapshot.val() || "1998")) {
+                unlockedSections[dbId] = true; content.style.display = "block";
+                if (wrapperId === 'budgetWrapper') refreshBudgetDisplay();
+                if (wrapperId === 'ownersWrapper') switchOwnerTab('ኸሊል', 'k');
+            } else { alert("❌ የተሳሳተ ፒን ነው!"); }
+        });
+    }
+
+    function toggleSubForm(formType) {
+        const buyForm = document.getElementById('subBuyForm');
+        const sellForm = document.getElementById('subSellForm');
+        
+        if (formType === 'buyForm') {
+            buyForm.style.display = buyForm.style.display === 'none' ? 'block' : 'none';
+            sellForm.style.display = 'none'; 
+        } else if (formType === 'sellForm') {
+            sellForm.style.display = sellForm.style.display === 'none' ? 'block' : 'none';
+            buyForm.style.display = 'none'; 
+        }
+    }
+
+    function refreshBudgetDisplay() {
+        if (unlockedSections['budgetContent'] || lockModes['budgetContent'] === "open") {
+            document.getElementById('liveBudgetDisplay').innerText = globalCalculatedBudget.toLocaleString() + " ETB";
+            document.getElementById('budgetSubText').innerText = "💰 በጀት ተከፍቷል";
+        } else {
+            document.getElementById('liveBudgetDisplay').innerText = "ቁልፉን ይክፈቱ";
+            document.getElementById('budgetSubText').innerText = "በጀት ለማየት እዚህ ይጫኑ";
+        }
+    }
+
+    function listenToCategories() {
+        db.ref(`multi_branch_data/shared_categories`).on('value', (snapshot) => {
+            const data = snapshot.val(); if (data && Array.isArray(data)) { categories = data; }
+            populateCategoryDropdowns();
+        });
+    }
+
+    function populateCategoryDropdowns() {
+        let html = ""; categories.forEach(cat => { html += `<option value="${cat}">${cat}</option>`; });
+        document.getElementById('itemCategory').innerHTML = html; document.getElementById('sellCategory').innerHTML = html;
+    }
+
+    function addNewCategoryPrompt() {
+        const newCat = prompt("➕ አዲስ የምድብ ስም ያስገቡ፦"); if (!newCat) return;
+        const cleaned = newCat.trim(); if (cleaned === "" || categories.includes(cleaned)) return;
+        categories.push(cleaned); db.ref(`multi_branch_data/shared_categories`).set(categories);
+    }
+
+    function startLiveListening() {
+        listenToCategories(); currentDbRef = db.ref(`multi_branch_data/${currentBranch}`);
+        currentDbRef.on('value', (snapshot) => {
+            const data = snapshot.val() || {}; items = data.items || {}; salesHistory = data.salesHistory || {}; ownerTransactions = [];
+            if (data.ownerTransactions) { Object.keys(data.ownerTransactions).forEach(k => ownerTransactions.push({ firebaseKey: k, ...data.ownerTransactions[k] })); }
+            globalCalculatedBudget = 0;
+            Object.keys(items).forEach(k => { globalCalculatedBudget += (items[k].buy + items[k].exp) * items[k].currentQty; });
+            refreshBudgetDisplay(); updateTable(); updateOwnersTable(); calculateOwnersTimeSummary(); filterReportHistory();
+        });
+    }
+
+    function autoFillSaleItemName() {
+        const cat = document.getElementById('sellCategory').value; const id = document.getElementById('itemRowId').value.trim();
+        if (id === "") { document.getElementById('sellItemName').value = ""; return; }
+        const key = Object.keys(items).find(k => items[k].category === cat && parseInt(items[k].customId) === parseInt(id));
+        document.getElementById('sellItemName').value = key ? items[key].name : "⚠️ አልተገኘም!";
+    }
+
+    function showAvailableItemsDropdown() {
+        const container = document.getElementById('itemsDropdownList'); container.innerHTML = "";
+        Object.keys(items).forEach((k) => {
+            container.innerHTML += `<button class="branch-option-btn" style="text-align:left; font-size:12px; padding:6px;" onclick="selectItemFromDropdown('${items[k].category}', ${items[k].customId}, '${items[k].name.replace(/'/g, "\\'")}')">
+                [${items[k].category} - ID ${items[k].customId}] ${items[k].name} (ቀሪ፦ ${items[k].currentQty})
+            </button>`;
+        });
+        document.getElementById('itemsDropdownModal').style.display = "flex";
+    }
+    function closeItemsDropdownModal() { document.getElementById('itemsDropdownModal').style.display = "none"; }
+    function selectItemFromDropdown(cat, id, name) { document.getElementById('sellCategory').value = cat; document.getElementById('itemRowId').value = id; document.getElementById('sellItemName').value = name; closeItemsDropdownModal(); }
+
+    function handleFormSubmit() {
+        const category = document.getElementById('itemCategory').value; 
+        const customId = parseInt(document.getElementById('itemCustomId').value.trim());
+        const name = document.getElementById('itemName').value.trim(); 
+        const buy = parseFloat(document.getElementById('buyPrice').value) || 0;
+        const exp = parseFloat(document.getElementById('expense').value) || 0; 
+        const qty = parseInt(document.getElementById('itemQty').value) || 0;
+        const itemDate = document.getElementById('itemDate').value;
+
+        if (isNaN(customId) || name === '' || qty <= 0 || !itemDate) { 
+            alert("❌ እባክዎ መስኮቹን በትክክል ይሙሉ!"); 
+            return; 
+        }
+
+        const editKey = document.getElementById('editItemIndex').value;
+        if (editKey === "") {
+            db.ref(`multi_branch_data/${currentBranch}/items`).push({ category, customId, name, buy, exp, initialQty: qty, currentQty: qty, totalSoldQty: 0, sellerName: "-", lastSaleDate: "-", totalProfit: 0, date: itemDate });
+        } else {
+            db.ref(`multi_branch_data/${currentBranch}/items/${editKey}`).update({ category, customId, name, buy, exp, initialQty: qty, currentQty: qty, date: itemDate });
+            document.getElementById('editItemIndex').value = "";
+        }
+        document.getElementById('itemCustomId').value = ''; document.getElementById('itemName').value = ''; document.getElementById('buyPrice').value = ''; document.getElementById('expense').value = '';
+        document.getElementById('itemQty').value = '1'; document.getElementById('itemDate').value = todayString;
+    }
+
+    function handleSaleSubmit() {
+        const cat = document.getElementById('sellCategory').value; 
+        const id = document.getElementById('itemRowId').value.trim();
+        const seller = document.getElementById('sellerName').value.trim(); 
+        const sell = parseFloat(document.getElementById('sellPrice').value) || 0;
+        const sqty = parseInt(document.getElementById('sellQty').value) || 0; 
+        const sDate = document.getElementById('saleDate').value;
+
+        if (id === "" || sqty <= 0 || sell <= 0 || !sDate) {
+            alert("❌ እባክዎ የሽያጭ ፎርሙን በትክክል ይሙሉ!");
+            return;
+        }
+
+        const k = Object.keys(items).find(key => items[key].category === cat && parseInt(items[key].customId) === parseInt(id));
+        if (!k || items[k].currentQty < sqty) { alert("❌ በቂ እቃ የለም ወይም የተሳሳተ ID!"); return; }
+        
+        const target = items[k]; const profit = (sell - (target.buy + target.exp)) * sqty;
+        db.ref(`multi_branch_data/${currentBranch}/items/${k}`).update({ currentQty: target.currentQty - sqty, totalSoldQty: (target.totalSoldQty || 0) + sqty, sellerName: seller, lastSaleDate: sDate, totalProfit: (target.totalProfit || 0) + profit });
+        db.ref(`multi_branch_data/${currentBranch}/salesHistory`).push({ itemFirebaseKey: k, name: `[${target.category}] ${target.name}`, customId: target.customId, category: target.category, sellPrice: sell, qty: sqty, profit: profit, date: sDate, seller }).then(() => {
+            document.getElementById('itemRowId').value = ''; document.getElementById('sellItemName').value = ''; document.getElementById('sellPrice').value = ''; 
+            document.getElementById('sellQty').value = '1'; document.getElementById('saleDate').value = todayString;
+            alert("✅ ሽያጭ ተመዝግቧል!");
+        });
+    }
+
+    function editItem(k) { 
+        document.getElementById('editItemIndex').value = k; const i = items[k]; 
+        document.getElementById('itemCategory').value = i.category; document.getElementById('itemCustomId').value = i.customId; 
+        document.getElementById('itemName').value = i.name; document.getElementById('buyPrice').value = i.buy; 
+        document.getElementById('expense').value = i.exp; document.getElementById('itemQty').value = i.initialQty; 
+        document.getElementById('itemDate').value = i.date || todayString;
+        
+        document.getElementById('subBuyForm').style.display = 'block';
+        document.getElementById('subSellForm').style.display = 'none';
+        document.getElementById('mainItemsWrapper').style.display = 'block';
+    }
+    
+    function deleteItem(k) { if(confirm("እርግጠኛ ነዎት ማጥፋት ይፈልጋሉ?")) db.ref(`multi_branch_data/${currentBranch}/items/${k}`).remove(); }
+    function deleteOwnerTx(k) { if(confirm("መዝገቡ ይጥፋ?")) db.ref(`multi_branch_data/${currentBranch}/ownerTransactions/${k}`).remove(); }
+
+    function updateTable() {
+        const tbody = document.getElementById('tableBody'); tbody.innerHTML = '';
+        Object.keys(items).forEach((k) => {
+            const i = items[k];
+            tbody.innerHTML += `<tr><td>${i.category}</td><td>${i.customId}</td><td>${i.name}</td><td>${i.buy}</td><td>${i.exp}</td><td>${i.initialQty}</td><td>${i.currentQty}</td><td>${i.totalSoldQty}</td><td>${i.sellerName}</td><td>${i.date || i.lastSaleDate || "-"}</td><td>${i.totalProfit}</td><td><button class="btn-action btn-edit" onclick="editItem('${k}')">✏️</button> <button class="btn-action btn-delete" onclick="deleteItem('${k}')">🗑️</button></td></tr>`;
+        });
+    }
+
+    function updateOwnersTable() {
+        const tbody = document.getElementById('ownersTableBody'); tbody.innerHTML = '';
+        let sorted = [...ownerTransactions].reverse().sort((a,b) => (a.status === "እዳ አለበት" ? -1 : 1));
+        sorted.forEach((t, idx) => {
+            let actionBtn = t.status === "እዳ አለበት" ? `<button class="status-debt-btn" onclick="openPaymentModal(${ownerTransactions.findIndex(x=>x.firebaseKey===t.firebaseKey)})">⚠️ እዳ</button>` : `<span class="status-paid">✅ አልቋል</span>`;
+            tbody.innerHTML += `<tr><td>${idx+1}</td><td>${t.date}</td><td><b>${t.name}</b></td><td>${t.originalAmount}</td><td style="color:red;font-weight:bold;">${t.remainingDebt}</td><td>${t.reason}</td><td>${actionBtn}</td><td><img src="${t.signature}" width="60" height="20"></td><td><button class="btn-action btn-delete" onclick="deleteOwnerTx('${t.firebaseKey}')">🗑️</button></td></tr>`;
+        });
+    }
+
+    function switchReportTab(t) { currentReportTab = t; document.querySelectorAll('.report-tab-btn').forEach(b => b.classList.remove('active')); document.getElementById('rep-tab-' + t).classList.add('active'); filterReportHistory(); }
+
+    function filterReportHistory() {
+        const tbody = document.getElementById('reportTableBody'); if (!tbody) return; tbody.innerHTML = '';
+        const query = document.getElementById('reportSearchInput').value.toLowerCase().trim();
+        const now = new Date(); const todayStr = now.toISOString().split('T')[0]; 
+        let tQty = 0; let tProfit = 0;
+
+        Object.keys(salesHistory).forEach(k => {
+            const s = salesHistory[k]; if (!s.date) return; 
+            if (query && !s.category.toLowerCase().includes(query) && !String(s.customId).includes(query) && !s.name.toLowerCase().includes(query)) return;
+
+            let match = false;
+            const saleDateObj = new Date(s.date.replace(/-/g, '\/'));
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+            if (currentReportTab === 'daily') { if (s.date === todayStr) match = true; } 
+            else if (currentReportTab === 'weekly') { const diffDays = (todayStart - saleDateObj) / (1000 * 60 * 60 * 24); if (diffDays >= 0 && diffDays < 7) match = true; } 
+            else if (currentReportTab === 'monthly') { if (saleDateObj.getFullYear() === now.getFullYear() && saleDateObj.getMonth() === now.getMonth()) match = true; } 
+            else if (currentReportTab === 'yearly') { if (saleDateObj.getFullYear() === now.getFullYear()) match = true; }
+
+            if (match) {
+                tQty += parseInt(s.qty) || 0; tProfit += parseFloat(s.profit) || 0;
+                tbody.innerHTML += `<tr><td>${s.date}</td><td><b>${s.name}</b></td><td>${s.sellPrice}</td><td><button class="btn-action btn-edit" onclick="alert('እቃ፦ ${s.name}\\nትርፍ፦ ${s.profit} ETB')">👁️</button></td></tr>`;
+            }
+        });
+        document.getElementById('stat-total-qty').innerText = tQty; 
+        document.getElementById('stat-total-profit').innerText = tProfit.toLocaleString() + " ETB";
+    }
+
+    function switchOwnerTab(name, prefix) { document.querySelectorAll('.owner-tab-btn').forEach(b => b.classList.remove('active')); document.querySelectorAll('.owner-summary-card').forEach(c => c.style.display = 'none'); document.getElementById('tab-' + prefix).classList.add('active'); document.getElementById('card-' + name).style.display = 'block'; }
+
+    const canvas = document.getElementById('sigCanvas'); const ctx = canvas.getContext('2d'); let isDrawing = false;
+    canvas.addEventListener('mousedown', () => isDrawing = true); canvas.addEventListener('mouseup', () => { isDrawing = false; ctx.beginPath(); });
+    canvas.addEventListener('mousemove', drawSignature); canvas.addEventListener('touchstart', (e) => { isDrawing = true; e.preventDefault(); }); 
+    canvas.addEventListener('touchend', () => { isDrawing = false; ctx.beginPath(); }); canvas.addEventListener('touchmove', (e) => { drawSignature(e.touches[0]); e.preventDefault(); });
+
+    function drawSignature(e) {
+        if (!isDrawing) return; ctx.lineWidth = 2; ctx.strokeStyle = '#2c3e50';
+        const rect = canvas.getBoundingClientRect(); const x = (e.clientX || e.pageX) - rect.left; const y = (e.clientY || e.pageY) - rect.top;
+        ctx.lineTo(x, y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y);
+    }
+    function clearSignature() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+    const todayString = new Date().toISOString().split('T')[0];
+    document.getElementById('saleDate').value = todayString; document.getElementById('ownerDate').value = todayString; document.getElementById('itemDate').value = todayString;
+
+    function handleOwnerTransaction() {
+        const name = document.getElementById('ownerName').value; const amount = parseFloat(document.getElementById('ownerAmount').value) || 0;
+        const reason = document.getElementById('ownerReason').value.trim(); const date = document.getElementById('ownerDate').value;
+        if(amount <= 0 || reason === "" || !date) { alert("❌ እባክዎ ሁሉንም ይሙሉ!"); return; }
+        const sigData = canvas.toDataURL('image/jpeg', 0.1);
+        db.ref(`multi_branch_data/${currentBranch}/ownerTransactions`).push({ name, originalAmount: amount, remainingDebt: amount, reason, date, signature: sigData, status: "እዳ አለበት" }).then(() => {
+            clearSignature(); document.getElementById('ownerAmount').value = ''; document.getElementById('ownerReason').value = ''; alert("ዕዳ ተመዝግቧል!");
+        });
+    }
+
+    function openPaymentModal(idx) {
+        const d = ownerTransactions[idx]; activeDebtKey = d.firebaseKey;
+        document.getElementById('modalInfo').innerHTML = `ባለቤት፦ <b>${d.name}</b><br>ዕዳ፦ <b>${d.remainingDebt} ETB</b>`;
+        document.getElementById('payAmount').value = d.remainingDebt; document.getElementById('paymentModal').style.display = "flex";
+    }
+    function closeModal() { document.getElementById('paymentModal').style.display = "none"; }
+    function submitDebtPayment() {
+        const amt = parseFloat(document.getElementById('payAmount').value) || 0; const d = ownerTransactions.find(t => t.firebaseKey === activeDebtKey);
+        if(!d || amt <= 0 || amt > d.remainingDebt) return;
+        const rem = d.remainingDebt - amt; db.ref(`multi_branch_data/${currentBranch}/ownerTransactions/${activeDebtKey}`).update({ remainingDebt: rem, status: rem <= 0 ? "ተሟልቷል" : "እዳ አለበት" });
+        closeModal();
+    }
+
+    function calculateOwnersTimeSummary() {
+        const now = new Date(); const todayStr = now.toISOString().split('T')[0]; const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const sums = { "ኸሊል": { daily: 0, weekly: 0, monthly: 0, yearly: 0 }, "ነስሬ": { daily: 0, weekly: 0, monthly: 0, yearly: 0 }, "ዚዳን": { daily: 0, weekly: 0, monthly: 0, yearly: 0 } };
+
+        ownerTransactions.forEach(t => {
+            if(!t.date) return; const d = new Date(t.date.replace(/-/g, '\/'));
+            if(sums[t.name]) {
+                if(t.date === todayStr) sums[t.name].daily += t.remainingDebt;
+                const diffDays = (todayStart - d) / (1000 * 60 * 60 * 24);
+                if(diffDays >= 0 && diffDays < 7) sums[t.name].weekly += t.remainingDebt;
+                if(d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) sums[t.name].monthly += t.remainingDebt;
+                if(d.getFullYear() === now.getFullYear()) sums[t.name].yearly += t.remainingDebt;
+            }
+        });
+        const pr = { "ኸሊል": "k", "ነስሬ": "n", "ዚዳን": "z" };
+        for (let name in sums) {
+            let p = pr[name]; if(!p) continue;
+            document.getElementById(`${p}-daily`).innerText = sums[name].daily.toLocaleString() + " ETB"; document.getElementById(`${p}-weekly`).innerText = sums[name].weekly.toLocaleString() + " ETB";
+            document.getElementById(`${p}-monthly`).innerText = sums[name].monthly.toLocaleString() + " ETB"; document.getElementById(`${p}-yearly`).innerText = sums[name].yearly.toLocaleString() + " ETB";
+        }
+    }
+</script>
+</body>
+</html>
